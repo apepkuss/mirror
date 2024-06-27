@@ -1,6 +1,8 @@
+import re
+
 import requests
 import streamlit as st
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_download
 
 # Initialize session state variables if they don't exist
 if "list_pressed" not in st.session_state:
@@ -77,3 +79,61 @@ if st.session_state["list_pressed"] and st.session_state["options"]:
                 progress_bar.empty()  # Optionally clear/hide the progress bar after download
 
             st.write(f"Downloaded '{selected_file}'")
+
+
+def get_readme_content(repo_id, revision="main"):
+    """
+    Download the README.md file content from a Hugging Face repository.
+
+    Parameters:
+    - repo_id (str): The repository ID in the format "namespace/repository_name".
+    - revision (str): The branch name, tag, or commit hash. Default is "main".
+
+    Returns:
+    - str: The content of the README.md file.
+    """
+    # Download the README.md file
+    readme_path = hf_hub_download(
+        repo_id=repo_id, filename="README.md", revision=revision
+    )
+
+    # Read the content of the README.md file
+    with open(readme_path, "r", encoding="utf-8") as readme_file:
+        readme_content = readme_file.read()
+
+    return readme_content
+
+
+def extract_prompt_type(readme_content):
+    match = re.search(r"Prompt type: `(.+?)`", readme_content)
+    if match:
+        return match.group(1)  # This captures the value within the backticks
+    else:
+        return None
+
+
+def extract_reverse_type(readme_content):
+    match = re.search(r"Reverse prompt: `(.+?)`", readme_content)
+    if match:
+        return match.group(1)  # This captures the value within the backticks
+    else:
+        return None
+
+
+# get the README.md content
+readme_content = get_readme_content(repo_id)
+
+# try to parse the prompt type from the README.md file
+prompt_template = extract_prompt_type(readme_content)
+print(f"Prompt template: {prompt_template}")
+if prompt_template is None:
+    prompt_template = st.text_input("Prompt template")
+
+# try to parse the reverse prompt from the README.md file
+reverse_prompt = extract_reverse_type(readme_content)
+print(f"Reverse prompt: {reverse_prompt}")
+if prompt_template is None and reverse_prompt is None:
+    reverse_prompt = st.text_input("Reverse prompt")
+
+
+image_tag = st.text_input("Docker image tag")
