@@ -1,5 +1,7 @@
 import re
 
+import docker
+import docker.errors
 import requests
 import streamlit as st
 from huggingface_hub import HfApi, hf_hub_download
@@ -9,6 +11,8 @@ if "list_pressed" not in st.session_state:
     st.session_state["list_pressed"] = False
 if "options" not in st.session_state:
     st.session_state["options"] = None
+if "chat_model_file" not in st.session_state:
+    st.session_state["chat_model_file"] = None
 
 
 # Streamlit UI
@@ -78,6 +82,8 @@ if st.session_state["list_pressed"] and st.session_state["options"]:
 
                 progress_bar.empty()  # Optionally clear/hide the progress bar after download
 
+            st.session_state["chat_model_file"] = selected_file
+
             st.write(f"Downloaded '{selected_file}'")
 
 
@@ -120,20 +126,82 @@ def extract_reverse_type(readme_content):
         return None
 
 
-# get the README.md content
-readme_content = get_readme_content(repo_id)
+def build_docker_image(dockerfile, tag, build_args=None, platform=None):
+    """
+    Build a Docker image with build arguments.
 
-# try to parse the prompt type from the README.md file
-prompt_template = extract_prompt_type(readme_content)
-print(f"Prompt template: {prompt_template}")
-if prompt_template is None:
-    prompt_template = st.text_input("Prompt template")
+    Parameters:
+    - dockerfile (str): Path to the directory containing the Dockerfile.
+    - tag (str): The tag to give to the image.
+    - build_args (dict, optional): A dictionary of build arguments.
+    - platform (str, optional): Platform in the format os[/arch[/variant]].
 
-# try to parse the reverse prompt from the README.md file
-reverse_prompt = extract_reverse_type(readme_content)
-print(f"Reverse prompt: {reverse_prompt}")
-if prompt_template is None and reverse_prompt is None:
-    reverse_prompt = st.text_input("Reverse prompt")
+    Returns:
+    - The image object if the build was successful.
+    """
+    try:
+        client = docker.from_env()
+        image, build_log = client.images.build(
+            path=dockerfile,
+            tag=tag,
+            buildargs=build_args,
+            platform=platform,
+        )
+        for line in build_log:
+            if "stream" in line:
+                print(line["stream"].strip())
+        return image
+    except docker.errors.BuildError as build_error:
+        print(f"Error building Docker image: {build_error}")
+        for line in build_error.build_log:
+            if "stream" in line:
+                print(line["stream"].strip())
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
-image_tag = st.text_input("Docker image tag")
+if st.session_state["chat_model_file"]:
+    # get the README.md content
+    readme_content = get_readme_content(repo_id)
+
+    # try to parse the prompt type from the README.md file
+    prompt_template = extract_prompt_type(readme_content)
+    if prompt_template is None:
+        prompt_template = st.text_input("Prompt template")
+    if prompt_template:
+        st.write(f"Prompt template: {prompt_template}")
+
+    # try to parse the reverse prompt from the README.md file
+    reverse_prompt = extract_reverse_type(readme_content)
+    if prompt_template is None and reverse_prompt is None:
+        reverse_prompt = st.text_input("Reverse prompt")
+    if reverse_prompt:
+        st.write(f"Reverse prompt: {reverse_prompt}")
+
+    if prompt_template:
+        image_tag = st.text_input("Docker image tag")
+        if image_tag:
+
+            # Example usage
+            dockerfile = "."  # Assuming the Dockerfile is in the current directory
+            # tag = "apepkuss/qwen-2-0.5b-instruct:latest"  # "apepkuss/Qwen2-0.5B-Instruct-GGUF:latest"
+            platform = "linux/arm64"
+            if reverse_prompt:
+                build_args = {
+                    "CHAT_MODEL_FILE": st.session_state["chat_model_file"],
+                    "PROMPT_TEMPLATE": prompt_template,
+                    "REVERSE_TEMPLATE": reverse_prompt,
+                }
+            else:
+                build_args = {
+                    "CHAT_MODEL_FILE": st.session_state["chat_model_file"],
+                    "PROMPT_TEMPLATE": prompt_template,
+                }
+
+            if st.button("Build Docker Image"):
+                st.write(f"Building Docker image {image_tag}...")
+                image = build_docker_image(dockerfile, image_tag, build_args, platform)
+
+                if image:
+                    st.write(f"Docker image {image_tag} built successfully.")
+                # st.write(f"Docker image {image_tag} built successfully.")
