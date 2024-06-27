@@ -46,7 +46,6 @@ if st.session_state["list_pressed"] and st.session_state["options"]:
     # Display the "Download Selected File" button
     if selected_file:
         if st.button("Download Selected File"):
-            print(f"Downloading {selected_file}...")
 
             # Construct the URL for the selected file
             file_url = f"https://huggingface.co/{repo_id}/resolve/main/{selected_file}"
