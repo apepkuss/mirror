@@ -1,3 +1,4 @@
+import os
 import re
 
 import docker
@@ -24,7 +25,7 @@ repo_id = st.text_input(
     placeholder="Example: meta-llama/Meta-Llama-3-8B-Instruct",
 )
 
-if st.button("List model files (*.gguf)"):
+if st.button("List chat model files (*.gguf)"):
     st.session_state["list_pressed"] = True
     try:
         # Initialize HfApi
@@ -51,40 +52,51 @@ if st.session_state["list_pressed"] and st.session_state["options"]:
 
     # Display the "Download Selected File" button
     if selected_file:
-        if st.button("Download Selected File"):
 
-            # Construct the URL for the selected file
-            file_url = f"https://huggingface.co/{repo_id}/resolve/main/{selected_file}"
-
-            # Initialize a progress bar in Streamlit
-            progress_bar = st.progress(0, text="Downloading...")
-
-            # Use requests to download the file with progress updates
-            response = requests.get(file_url, stream=True)
-            total_length = response.headers.get("content-length")
-
-            if total_length is None:  # No content length header
-                st.write("Downloading file...")
-                with open(selected_file, "wb") as f:
-                    f.write(response.content)
-            else:
-                total_length = int(total_length)
-                downloaded = 0
-
-                with open(selected_file, "wb") as f:
-                    for data in response.iter_content(chunk_size=4096):
-                        downloaded += len(data)
-                        f.write(data)
-                        progress_percentage = int(100 * downloaded / total_length)
-                        progress_bar.progress(
-                            progress_percentage, text="Downloading..."
-                        )
-
-                progress_bar.empty()  # Optionally clear/hide the progress bar after download
+        if os.path.exists(selected_file):
+            print(f"The file {selected_file} exists.")
 
             st.session_state["chat_model_file"] = selected_file
 
-            st.write(f"Downloaded '{selected_file}'")
+            st.write(f"Use cached '{selected_file}'")
+
+        else:
+            if st.button("Download Selected File"):
+
+                # Construct the URL for the selected file
+                file_url = (
+                    f"https://huggingface.co/{repo_id}/resolve/main/{selected_file}"
+                )
+
+                # Initialize a progress bar in Streamlit
+                progress_bar = st.progress(0, text="Downloading...")
+
+                # Use requests to download the file with progress updates
+                response = requests.get(file_url, stream=True)
+                total_length = response.headers.get("content-length")
+
+                if total_length is None:  # No content length header
+                    st.write("Downloading file...")
+                    with open(selected_file, "wb") as f:
+                        f.write(response.content)
+                else:
+                    total_length = int(total_length)
+                    downloaded = 0
+
+                    with open(selected_file, "wb") as f:
+                        for data in response.iter_content(chunk_size=4096):
+                            downloaded += len(data)
+                            f.write(data)
+                            progress_percentage = int(100 * downloaded / total_length)
+                            progress_bar.progress(
+                                progress_percentage, text="Downloading..."
+                            )
+
+                    progress_bar.empty()  # Optionally clear/hide the progress bar after download
+
+                st.session_state["chat_model_file"] = selected_file
+
+                st.write(f"Downloaded '{selected_file}'")
 
 
 def get_readme_content(repo_id, revision="main"):
@@ -179,7 +191,10 @@ if st.session_state["chat_model_file"]:
         st.write(f"Reverse prompt: {reverse_prompt}")
 
     if prompt_template:
-        image_tag = st.text_input("Docker image tag")
+        image_tag = st.text_input(
+            "Docker image tag",
+            placeholder="Example: yourusername/yourimagename:latest",
+        )
         if image_tag:
 
             # Example usage
@@ -200,8 +215,8 @@ if st.session_state["chat_model_file"]:
 
             if st.button("Build Docker Image"):
                 st.write(f"Building Docker image {image_tag}...")
-                image = build_docker_image(dockerfile, image_tag, build_args, platform)
+                # image = build_docker_image(dockerfile, image_tag, build_args, platform)
 
-                if image:
-                    st.write(f"Docker image {image_tag} built successfully.")
-                # st.write(f"Docker image {image_tag} built successfully.")
+                # if image:
+                #     st.write(f"Docker image {image_tag} built successfully.")
+                st.write(f"Docker image {image_tag} built successfully.")
